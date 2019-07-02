@@ -6,6 +6,8 @@ name = "pypi"
 [packages]
 "cupy-cuda100" = "*"
 chainer = "*"
+opencv-python = "*"
+matplotlib = "*"
 
 [dev-packages]
 
