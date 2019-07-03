@@ -165,28 +165,33 @@ def get_mnist_num(dig_list: list, train=True) -> np.ndarray:
     return mnist_dataset
 
 
-def main(arguments):
+def main(arguments, neg_labels, pos_labels):
     output_dir_path = Path(arguments.output_dir)
     if not output_dir_path.exists():
         output_dir_path.mkdir()
-    with Path(arguments.setting).open("r") as f:
-        setting = json.load(f)
-    pprint.pprint(setting)
 
-    chainer.config.user_gpu_mode = (arguments.g >= 0)
+    # settings
+    adam_setting = {"alpha": arguments.adam_alpha,
+                    "beta1": arguments.adam_beta1,
+                    "beta2": arguments.adam_beta2}
+
+    updater_setting = {"n_dis": arguments.n_dis,
+                       "l2_lam": arguments.l2_lam,
+                       "noise_std": arguments.noise_std}
+    chainer.config.user_gpu_mode = (arguments.gpu_id >= 0)
     if chainer.config.user_gpu_mode:
         chainer.backends.cuda.get_device_from_id(arguments.g).use()
 
     # 訓練用正常データ
-    mnist_neg = get_mnist_num(setting["label"]["neg"])
+    mnist_neg = get_mnist_num(neg_labels)
 
     # iteratorを作成
-    kwds = {
-        "batch_size": setting["iterator"]["batch_size"],
+    iterator_setting = {
+        "batch_size": arguments.batch_size,
         "shuffle": True,
         "repeat": True
     }
-    neg_iter = iterators.SerialIterator(mnist_neg, **kwds)
+    neg_iter = iterators.SerialIterator(mnist_neg, **iterator_setting)
 
     generator = model.Generator()
     discriminator = model.Discriminator()
@@ -194,27 +199,27 @@ def main(arguments):
         generator.to_gpu()
         discriminator.to_gpu()
 
-    opt_g = optimizers.Adam(**setting["optimizer"])
+    opt_g = optimizers.Adam(**adam_setting)
     opt_g.setup(generator)
-    opt_d = optimizers.Adam(**setting["optimizer"])
+    opt_d = optimizers.Adam(**adam_setting)
     opt_d.setup(discriminator)
-    if setting["regularization"]["weight_decay"] > 0.0:
-        opt_g.add_hook(chainer.optimizer.WeightDecay(setting["regularization"]["weight_decay"]))
-        opt_d.add_hook(chainer.optimizer.WeightDecay(setting["regularization"]["weight_decay"]))
+    if arguments.weight_decay > 0.0:
+        opt_g.add_hook(chainer.optimizer.WeightDecay(arguments.weight_decay))
+        opt_d.add_hook(chainer.optimizer.WeightDecay(arguments.weight_decay))
 
-    updater = GANUpdater(neg_iter, opt_g, opt_d, **setting["updater"])
-    trainer = Trainer(updater, (setting["iteration"], "iteration"), out=arguments.result_dir)
+    updater = GANUpdater(neg_iter, opt_g, opt_d, **updater_setting)
+    trainer = Trainer(updater, (arguments.iteration, "iteration"), out=arguments.result_dir)
 
     # テストデータを取得
-    test_neg = get_mnist_num(setting["label"]["neg"], train=False)
-    test_pos = get_mnist_num(setting["label"]["pos"], train=False)
+    test_neg = get_mnist_num(neg_labels, train=False)
+    test_pos = get_mnist_num(pos_labels, train=False)
     # 正常にラベル0，異常にラベル1を付与
     test_neg = chainer.datasets.TupleDataset(test_neg, np.zeros(len(test_neg), dtype=np.int32))
     test_pos = chainer.datasets.TupleDataset(test_pos, np.ones(len(test_pos), dtype=np.int32))
     test_ds = chainer.datasets.ConcatenatedDataset(test_neg, test_pos)
     test_iter = iterators.SerialIterator(test_ds, repeat=False, shuffle=True, batch_size=500)
 
-    ev_target = model.EvalModel(generator, discriminator, setting["updater"]["noise_std"])
+    ev_target = model.EvalModel(generator, discriminator, arguments.noise_std)
     ev_target = model.ExtendedClassifier(ev_target)
     if chainer.config.user_gpu_mode:
         ev_target.to_gpu()
@@ -235,7 +240,7 @@ def main(arguments):
         extensions.PlotReport(("validation/main/F", "validation/main/accuracy"), "iteration", file_name="acc_plot.eps",
                               trigger=trigger))
     trainer.extend(
-        ext_save_img(generator, test_pos, test_neg, output_dir_path / "out_images", setting["updater"]["noise_std"]),
+        ext_save_img(generator, test_pos, test_neg, output_dir_path / "out_images", arguments.noise_std),
         trigger=trigger)
     trainer.extend(extensions.snapshot_object(generator, "gen_iter_{.updater.iteration:06d}.model"), trigger=trigger)
     trainer.extend(extensions.snapshot_object(discriminator, "dis_iter_{.updater.iteration:06d}.model"),
@@ -263,18 +268,8 @@ def get_arguments():
     return _args
 
 
-def parse_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("setting")
-    parser.add_argument("result_dir")
-    parser.add_argument("-g", type=int, default=-1, help="GPU ID (negative value indicates CPU mode)")
-
-    args = parser.parse_args()
-
-    pprint.pprint(vars(args))
-    main(args)
-
-
 if __name__ == "__main__":
     args = get_arguments()
-    main(args)
+    negative_labels = [1]
+    positive_labels = [0]
+    main(args, neg_labels=negative_labels, pos_labels=positive_labels)
