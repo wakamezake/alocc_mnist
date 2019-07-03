@@ -2,22 +2,14 @@
 import argparse
 import numpy as np
 import cv2
-
 import chainer
 import chainer.functions as F
-import chainer.links as L
-from chainer import Variable, iterators, Chain, optimizers
-from chainer.training import updaters, Trainer, extensions
-import chainer.datasets
 
-import matplotlib
-
-matplotlib.use("Agg")
-
-import model
-
-import subprocess, pprint, json
 from pathlib import Path
+from chainer import Variable, iterators, optimizers
+from chainer.training import updaters, Trainer, extensions
+from chainer import datasets
+from model import Generator, Discriminator, EvalModel, ExtendedClassifier
 
 
 class GANUpdater(updaters.StandardUpdater):
@@ -159,7 +151,7 @@ def get_mnist_num(dig_list: list, train=True) -> np.ndarray:
     """
     指定した数字の画像だけ返す
     """
-    mnist_dataset = chainer.datasets.get_mnist(ndim=3)[0 if train else 1]  # MNISTデータ取得
+    mnist_dataset = datasets.get_mnist(ndim=3)[0 if train else 1]  # MNISTデータ取得
     mnist_dataset = [img for img, label in mnist_dataset[:] if label in dig_list]
     mnist_dataset = np.stack(mnist_dataset)
     return mnist_dataset
@@ -193,8 +185,8 @@ def main(arguments, neg_labels, pos_labels):
     }
     neg_iter = iterators.SerialIterator(mnist_neg, **iterator_setting)
 
-    generator = model.Generator()
-    discriminator = model.Discriminator()
+    generator = Generator()
+    discriminator = Discriminator()
     if chainer.config.user_gpu_mode:
         generator.to_gpu()
         discriminator.to_gpu()
@@ -219,8 +211,8 @@ def main(arguments, neg_labels, pos_labels):
     test_ds = chainer.datasets.ConcatenatedDataset(test_neg, test_pos)
     test_iter = iterators.SerialIterator(test_ds, repeat=False, shuffle=True, batch_size=500)
 
-    ev_target = model.EvalModel(generator, discriminator, arguments.noise_std)
-    ev_target = model.ExtendedClassifier(ev_target)
+    ev_target = EvalModel(generator, discriminator, arguments.noise_std)
+    ev_target = ExtendedClassifier(ev_target)
     if chainer.config.user_gpu_mode:
         ev_target.to_gpu()
     evaluator = extensions.Evaluator(test_iter, ev_target, device=arguments.g if chainer.config.user_gpu_mode else None)
