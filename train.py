@@ -1,5 +1,5 @@
 # coding: utf-8
-
+import argparse
 import numpy as np
 import cv2
 
@@ -165,20 +165,17 @@ def get_mnist_num(dig_list: list, train=True) -> np.ndarray:
     return mnist_dataset
 
 
-def main(args):
-    result_dir_path = Path(args.result_dir)
-    try:
-        result_dir_path.mkdir(parents=True)
-    except FileExistsError:
-        pass
-
-    with Path(args.setting).open("r") as f:
+def main(arguments):
+    output_dir_path = Path(arguments.output_dir)
+    if not output_dir_path.exists():
+        output_dir_path.mkdir()
+    with Path(arguments.setting).open("r") as f:
         setting = json.load(f)
     pprint.pprint(setting)
 
-    chainer.config.user_gpu_mode = (args.g >= 0)
+    chainer.config.user_gpu_mode = (arguments.g >= 0)
     if chainer.config.user_gpu_mode:
-        chainer.backends.cuda.get_device_from_id(args.g).use()
+        chainer.backends.cuda.get_device_from_id(arguments.g).use()
 
     # 訓練用正常データ
     mnist_neg = get_mnist_num(setting["label"]["neg"])
@@ -206,7 +203,7 @@ def main(args):
         opt_d.add_hook(chainer.optimizer.WeightDecay(setting["regularization"]["weight_decay"]))
 
     updater = GANUpdater(neg_iter, opt_g, opt_d, **setting["updater"])
-    trainer = Trainer(updater, (setting["iteration"], "iteration"), out=args.result_dir)
+    trainer = Trainer(updater, (setting["iteration"], "iteration"), out=arguments.result_dir)
 
     # テストデータを取得
     test_neg = get_mnist_num(setting["label"]["neg"], train=False)
@@ -221,7 +218,7 @@ def main(args):
     ev_target = model.ExtendedClassifier(ev_target)
     if chainer.config.user_gpu_mode:
         ev_target.to_gpu()
-    evaluator = extensions.Evaluator(test_iter, ev_target, device=args.g if chainer.config.user_gpu_mode else None)
+    evaluator = extensions.Evaluator(test_iter, ev_target, device=arguments.g if chainer.config.user_gpu_mode else None)
     trainer.extend(evaluator)
 
     # 訓練経過の表示などの設定
@@ -238,7 +235,7 @@ def main(args):
         extensions.PlotReport(("validation/main/F", "validation/main/accuracy"), "iteration", file_name="acc_plot.eps",
                               trigger=trigger))
     trainer.extend(
-        ext_save_img(generator, test_pos, test_neg, result_dir_path / "out_images", setting["updater"]["noise_std"]),
+        ext_save_img(generator, test_pos, test_neg, output_dir_path / "out_images", setting["updater"]["noise_std"]),
         trigger=trigger)
     trainer.extend(extensions.snapshot_object(generator, "gen_iter_{.updater.iteration:06d}.model"), trigger=trigger)
     trainer.extend(extensions.snapshot_object(discriminator, "dis_iter_{.updater.iteration:06d}.model"),
@@ -248,8 +245,25 @@ def main(args):
     trainer.run()
 
 
+def get_arguments():
+    _parser = argparse.ArgumentParser()
+    _parser.add_argument("--epochs", type=int, default=100)
+    _parser.add_argument("--batch_size", type=int, default=128)
+    _parser.add_argument("--iteration", type=int, default=100000)
+    _parser.add_argument("output_dir", type=str)
+    _parser.add_argument("--gpu_id", type=int, default=-1, help="GPU ID (negative value indicates CPU mode)")
+    _parser.add_argument("--adam_alpha", type=float, default=0.0002)
+    _parser.add_argument("--adam_beta1", type=float, default=0.5)
+    _parser.add_argument("--adam_beta2", type=float, default=0.9)
+    _parser.add_argument("--ndis", type=int, default=1)
+    _parser.add_argument("--l2_lam", type=float, default=0.2)
+    _parser.add_argument("--noise_std", type=float, default=0.155)
+    _parser.add_argument("--weight_decay", type=float, default=0.00001)
+    _args = _parser.parse_args()
+    return _args
+
+
 def parse_args():
-    import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("setting")
     parser.add_argument("result_dir")
@@ -262,4 +276,5 @@ def parse_args():
 
 
 if __name__ == "__main__":
-    parse_args()
+    args = get_arguments()
+    main(args)
