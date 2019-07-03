@@ -252,7 +252,7 @@ def get_arguments():
     _parser.add_argument("--adam_alpha", type=float, default=0.0002)
     _parser.add_argument("--adam_beta1", type=float, default=0.5)
     _parser.add_argument("--adam_beta2", type=float, default=0.9)
-    _parser.add_argument("--ndis", type=int, default=1)
+    _parser.add_argument("--n_dis", type=int, default=1)
     _parser.add_argument("--l2_lam", type=float, default=0.2)
     _parser.add_argument("--noise_std", type=float, default=0.155)
     _parser.add_argument("--weight_decay", type=float, default=0.00001)
