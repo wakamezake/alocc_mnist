@@ -172,7 +172,7 @@ def main(arguments, neg_labels, pos_labels):
                        "noise_std": arguments.noise_std}
     chainer.config.user_gpu_mode = (arguments.gpu_id >= 0)
     if chainer.config.user_gpu_mode:
-        chainer.backends.cuda.get_device_from_id(arguments.gpu_id ).use()
+        chainer.backends.cuda.get_device_from_id(arguments.gpu_id).use()
 
     # 訓練用正常データ
     mnist_neg = get_mnist_num(neg_labels)
@@ -200,7 +200,7 @@ def main(arguments, neg_labels, pos_labels):
         opt_d.add_hook(chainer.optimizer.WeightDecay(arguments.weight_decay))
 
     updater = GANUpdater(neg_iter, opt_g, opt_d, **updater_setting)
-    trainer = Trainer(updater, (arguments.iteration, "iteration"), out=arguments.result_dir)
+    trainer = Trainer(updater, (arguments.iteration, "iteration"), out=str(output_dir_path))
 
     # テストデータを取得
     test_neg = get_mnist_num(neg_labels, train=False)
@@ -215,7 +215,8 @@ def main(arguments, neg_labels, pos_labels):
     ev_target = ExtendedClassifier(ev_target)
     if chainer.config.user_gpu_mode:
         ev_target.to_gpu()
-    evaluator = extensions.Evaluator(test_iter, ev_target, device=arguments.g if chainer.config.user_gpu_mode else None)
+    evaluator = extensions.Evaluator(test_iter, ev_target,
+                                     device=arguments.gpu_id if chainer.config.user_gpu_mode else None)
     trainer.extend(evaluator)
 
     # 訓練経過の表示などの設定
