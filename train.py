@@ -172,7 +172,7 @@ def main(arguments, neg_labels, pos_labels):
                        "noise_std": arguments.noise_std}
     chainer.config.user_gpu_mode = (arguments.gpu_id >= 0)
     if chainer.config.user_gpu_mode:
-        chainer.backends.cuda.get_device_from_id(arguments.g).use()
+        chainer.backends.cuda.get_device_from_id(arguments.gpu_id ).use()
 
     # 訓練用正常データ
     mnist_neg = get_mnist_num(neg_labels)
